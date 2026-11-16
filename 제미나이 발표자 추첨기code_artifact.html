@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>발표자 로또 추첨기</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Noto Sans KR & Jua (게임 느낌의 둥근 폰트) -->
+    <link href="https://fonts.googleapis.com/css2?family=Jua&family=Noto+Sans+KR:wght@400;500;700;900&display=swap" rel="stylesheet">
+    <!-- Tone.js (효과음 생성용) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Canvas Confetti (당첨 축하 꽃가루 효과) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+
+    <style>
+        body {
+            font-family: 'Noto Sans KR', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        .font-jua {
+            font-family: 'Jua', sans-serif;
+        }
+
+        /* 로또 공 입체감 스타일 */
+        .lotto-ball {
+            border-radius: 50%;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            color: white;
+            text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.4);
+            box-shadow: inset -4px -4px 8px rgba(0, 0, 0, 0.3),
+                        inset 4px 4px 8px rgba(255, 255, 255, 0.6),
+                        0 4px 8px rgba(0, 0, 0, 0.2);
+            transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1);
+            user-select: none;
+        }
+
+        /* 번호대별 로또 공 색상 (한국 동행복권 기준) */
+        .ball-yellow { background: radial-gradient(circle at 30% 30%, #fde047, #eab308); } /* 1~10 */
+        .ball-blue   { background: radial-gradient(circle at 30% 30%, #60a5fa, #2563eb); } /* 11~20 */
+        .ball-red    { background: radial-gradient(circle at 30% 30%, #f87171, #dc2626); } /* 21~30 */
+        .ball-gray   { background: radial-gradient(circle at 30% 30%, #9ca3af, #4b5563); } /* 31~40 */
+
+        /* 선택되지 않은 대기 상태의 번호표 */
+        .ticket-unselected {
+            background: white;
+            color: #475569;
+            border: 2px dashed #cbd5e1;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+            text-shadow: none;
+        }
+        .ticket-unselected:hover {
+            border-color: #3b82f6;
+            color: #2563eb;
+            transform: translateY(-2px) scale(1.05);
+            box-shadow: 0 6px 12px rgba(37, 99, 235, 0.15);
+        }
+
+        /* 선택 완료된 공 애니메이션 */
+        .ticket-selected {
+            transform: scale(1.05);
+            animation: popIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+
+        @keyframes popIn {
+            0% { transform: scale(0.7); }
+            70% { transform: scale(1.15); }
+            100% { transform: scale(1.05); }
+        }
+
+        /* 추첨기 돔 유리 반사 효과 */
+        .dome-container {
+            position: relative;
+            border-radius: 50%;
+            background: radial-gradient(circle at 35% 25%, rgba(255, 255, 255, 0.9) 0%, rgba(241, 245, 249, 0.6) 50%, rgba(203, 213, 225, 0.8) 100%);
+            box-shadow: inset 0 0 30px rgba(255, 255, 255, 0.9),
+                        inset -10px -15px 30px rgba(148, 163, 184, 0.4),
+                        0 20px 35px -10px rgba(15, 23, 42, 0.25);
+            border: 6px solid #e2e8f0;
+            overflow: hidden;
+        }
+
+        .dome-glare {
+            position: absolute;
+            top: 8%;
+            left: 15%;
+            width: 35%;
+            height: 20%;
+            border-radius: 50%;
+            background: linear-gradient(135deg, rgba(255,255,255,0.85) 0%, rgba(255,255,255,0) 100%);
+            transform: rotate(-30deg);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        /* 당첨 공 등장 애니메이션 */
+        @keyframes winnerBounce {
+            0% { transform: scale(0) translateY(50px); opacity: 0; }
+            60% { transform: scale(1.15) translateY(-10px); opacity: 1; }
+            80% { transform: scale(0.95) translateY(5px); }
+            100% { transform: scale(1) translateY(0); }
+        }
+
+        .winner-reveal {
+            animation: winnerBounce 0.7s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+
+        /* 커스텀 스크롤바 */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 9999px;
+        }
+    </style>
+</head>
+<body class="text-slate-800 flex flex-col items-center justify-between p-3 sm:p-6">
+
+    <!-- 상단 헤더 -->
+    <header class="w-full max-w-4xl flex flex-wrap items-center justify-between gap-3 bg-white/80 backdrop-blur-md px-5 py-3.5 rounded-2xl shadow-sm border border-white mb-4">
+        <div class="flex items-center gap-2.5">
+            <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center text-white shadow-md">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+            </div>
+            <div>
+                <h1 class="text-xl sm:text-2xl font-jua text-slate-800 tracking-wide">두근두근 발표자 로또 추첨기</h1>
+                <p class="text-xs text-slate-500 hidden sm:block">미발표 학생들이 번호표를 고른 뒤 공을 돌려 당첨자를 뽑아보세요!</p>
+            </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+            <!-- 소리 켜기/끄기 버튼 -->
+            <button id="soundToggleBtn" onclick="toggleSound()" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition flex items-center gap-1.5 text-sm font-medium" title="효과음 켜기/끄기">
+                <span id="soundIcon">🔊</span>
+                <span class="hidden sm:inline" id="soundText">효과음 ON</span>
+            </button>
+            <!-- 처음부터 초기화 버튼 -->
+            <button onclick="resetAll()" class="px-3.5 py-2.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 font-bold text-sm transition flex items-center gap-1.5 border border-rose-200">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+                <span>초기화</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- 알림 메시지 토스트 (alert 대체용) -->
+    <div id="toastBox" class="fixed top-20 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 -translate-y-3">
+        <div id="toastContent" class="bg-slate-800 text-white px-5 py-3 rounded-2xl shadow-xl font-medium text-sm flex items-center gap-2">
+            <span>ℹ️</span>
+            <span id="toastMessage">메시지 내용</span>
+        </div>
+    </div>
+
+    <!-- 메인 컨텐츠 컨테이너 -->
+    <main class="w-full max-w-4xl flex-1 flex flex-col justify-center">
+
+        <!-- [STEP 1] 인원 수 설정 화면 -->
+        <section id="stepSetup" class="bg-white rounded-3xl shadow-xl border border-slate-100 p-6 sm:p-10 text-center max-w-lg mx-auto w-full transition-all">
+            <div class="w-20 h-20 bg-blue-50 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-5 shadow-inner">
+                <span class="text-4xl">🎟️</span>
+            </div>
+            <h2 class="text-2xl sm:text-3xl font-jua text-slate-800 mb-2">몇 명의 학생이 참여하나요?</h2>
+            <p class="text-slate-500 text-sm sm:text-base mb-8">미발표 인원수를 입력하면 해당 개수만큼 번호표가 생성됩니다.<br>(최소 2명 ~ 최대 40명)</p>
+
+            <!-- 인원수 조절 컨트롤 -->
+            <div class="flex items-center justify-center gap-4 mb-6">
+                <button onclick="adjustCount(-1)" class="w-12 h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-2xl transition flex items-center justify-center shadow-sm">
+                    -
+                </button>
+                <div class="relative">
+                    <input type="number" id="studentCountInput" value="20" min="2" max="40" onchange="validateCountInput()"
+                        class="w-28 h-16 text-center text-3xl sm:text-4xl font-black text-blue-600 bg-blue-50/50 border-2 border-blue-200 rounded-2xl focus:outline-none focus:border-blue-500 transition">
+                    <span class="absolute right-3 bottom-2 text-xs font-bold text-blue-400">명</span>
+                </div>
+                <button onclick="adjustCount(1)" class="w-12 h-12 rounded-2xl bg-slate-100 hover:bg-slate-200 active:scale-95 text-slate-700 font-black text-2xl transition flex items-center justify-center shadow-sm">
+                    +
+                </button>
+            </div>
+
+            <!-- 빠른 인원 선택 버튼 -->
+            <div class="flex flex-wrap justify-center gap-2 mb-8">
+                <button onclick="setQuickCount(10)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">10명</button>
+                <button onclick="setQuickCount(15)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">15명</button>
+                <button onclick="setQuickCount(20)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">20명</button>
+                <button onclick="setQuickCount(25)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">25명</button>
+                <button onclick="setQuickCount(30)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">30명</button>
+                <button onclick="setQuickCount(40)" class="px-3.5 py-1.5 rounded-xl bg-slate-100 hover:bg-blue-100 hover:text-blue-700 text-slate-600 text-sm font-bold transition">40명</button>
+            </div>
+
+            <button onclick="goToSelectionStep()" class="w-full py-4 rounded-2xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-700 hover:to-indigo-700 text-white font-bold text-lg shadow-lg shadow-blue-500/30 active:scale-[0.99] transition flex items-center justify-center gap-2">
+                <span>번호표 생성하기</span>
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                    <path fill-rule="evenodd" d="M10.293 3.293a1 1 0 011.414 0l6 6a1 1 0 010 1.414l-6 6a1 1 0 01-1.414-1.414L14.586 11H3a1 1 0 110-2h11.586l-4.293-4.293a1 1 0 010-1.414z" clip-rule="evenodd" />
+                </svg>
+            </button>
+        </section>
+
+        <!-- [STEP 2] 번호표 선택 화면 -->
+        <section id="stepSelection" class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 p-5 sm:p-8 w-full transition-all">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 mb-5 border-b border-slate-100">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="px-2.5 py-0.5 rounded-lg bg-blue-100 text-blue-700 font-bold text-xs">STEP 2</span>
+                        <h2 class="text-xl sm:text-2xl font-jua text-slate-800">각자 원하는 번호표를 선택하세요!</h2>
+                    </div>
+                    <p class="text-slate-500 text-xs sm:text-sm mt-1">번호를 클릭하면 내 로또 공으로 등록됩니다. (다시 누르면 취소)</p>
+                </div>
+
+                <!-- 선택 현황 카운터 & 전체선택 버튼 -->
+                <div class="flex items-center gap-2 self-end sm:self-center">
+                    <div class="bg-slate-100 px-3.5 py-2 rounded-xl text-sm font-bold text-slate-700">
+                        선택됨: <span id="selectedCountBadge" class="text-blue-600 text-base">0</span> / <span id="totalCountBadge">20</span>명
+                    </div>
+                    <button onclick="toggleSelectAll()" id="selectAllBtn" class="px-3 py-2 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-600 font-bold text-xs sm:text-sm transition border border-indigo-200">
+                        전체 선택
+                    </button>
+                </div>
+            </div>
+
+            <!-- 번호표 그리드 (최대 40개) -->
+            <div id="ticketGrid" class="grid grid-cols-5 sm:grid-cols-8 md:grid-cols-10 gap-2.5 sm:gap-3.5 justify-items-center py-2 mb-6">
+                <!-- 자바스크립트로 번호 공 생성 -->
+            </div>
+
+            <!-- 하단 액션 버튼 -->
+            <div class="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100">
+                <button onclick="backToSetup()" class="w-full sm:w-auto px-5 py-3.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-sm transition">
+                    ← 인원수 다시 설정
+                </button>
+                <button onclick="goToDrawStep()" id="toDrawBtn" class="w-full sm:w-auto flex-1 max-w-md py-3.5 px-6 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-600 hover:to-teal-700 text-white font-bold text-base sm:text-lg shadow-lg shadow-emerald-500/30 transition flex items-center justify-center gap-2">
+                    <span>선택한 공을 추첨기에 넣기</span>
+                    <span class="bg-white/20 px-2 py-0.5 rounded-lg text-sm" id="btnBallCount">0개</span>
+                </button>
+            </div>
+        </section>
+
+        <!-- [STEP 3] 로또 추첨기 실행 화면 -->
+        <section id="stepDraw" class="hidden bg-white rounded-3xl shadow-xl border border-slate-100 p-5 sm:p-8 w-full text-center relative overflow-hidden">
+            <div class="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <button onclick="backToSelection()" id="backToSelectBtn" class="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 font-bold text-xs sm:text-sm transition">
+                    ← 번호 다시 고르기
+                </button>
+                <div class="text-xs sm:text-sm font-bold text-slate-500 bg-slate-100 px-3.5 py-1.5 rounded-full">
+                    추첨기 속 공 개수: <span id="machineBallCount" class="text-indigo-600">0</span>개
+                </div>
+            </div>
+
+            <h2 id="drawStatusTitle" class="text-2xl sm:text-3xl font-jua text-slate-800 mb-1">추첨 준비 완료!</h2>
+            <p id="drawStatusSub" class="text-slate-500 text-sm mb-5">아래 [추첨 시작!] 버튼을 누르면 공이 섞이며 당첨 번호가 나옵니다.</p>
+
+            <!-- 로또 추첨기 돔 & 캔버스 영역 -->
+            <div class="relative flex flex-col items-center justify-center my-2">
+                <!-- 유리 돔 -->
+                <div id="domeWrapper" class="dome-container w-64 h-64 sm:w-80 sm:h-80 flex items-center justify-center">
+                    <div class="dome-glare"></div>
+                    <canvas id="lottoCanvas" class="w-full h-full block"></canvas>
+                </div>
+
+                <!-- 추첨기 받침대 -->
+                <div class="w-48 sm:w-60 h-12 bg-gradient-to-b from-slate-700 to-slate-900 rounded-b-3xl -mt-4 z-10 shadow-xl flex flex-col items-center justify-center border-t-4 border-amber-400">
+                    <div class="w-16 h-2 bg-slate-950 rounded-full mb-1"></div>
+                    <span class="text-[10px] font-bold tracking-widest text-amber-400 uppercase">LOTTO PRESENTER</span>
+                </div>
+
+                <!-- 당첨 결과 오버레이 카드 (추첨 완료 시 표시) -->
+                <div id="winnerOverlay" class="hidden absolute inset-0 bg-white/90 backdrop-blur-sm rounded-2xl z-20 flex flex-col items-center justify-center p-4">
+                    <span class="px-3 py-1 rounded-full bg-amber-100 text-amber-700 font-extrabold text-xs sm:text-sm mb-3 animate-bounce">
+                        🎉 축하합니다! 오늘의 발표자 당첨! 🎉
+                    </span>
+                    <div id="winnerBallDisplay" class="lotto-ball w-28 h-28 sm:w-36 sm:h-36 text-5xl sm:text-6xl mb-4 winner-reveal shadow-2xl">
+                        ?
+                    </div>
+                    <p class="text-xl sm:text-2xl font-jua text-slate-800 mb-1">
+                        <span id="winnerNumberText" class="text-blue-600 underline decoration-amber-400 decoration-4">0번</span> 학생 당첨!
+                    </p>
+                    <p class="text-xs sm:text-sm text-slate-500 mb-5">멋진 발표 부탁드립니다 👏</p>
+
+                    <div class="flex flex-wrap justify-center gap-2.5">
+                        <button onclick="excludeWinnerAndRedraw()" id="excludeWinnerBtn" class="px-4 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-sm shadow-md transition">
+                            당첨자 빼고 한 명 더 뽑기
+                        </button>
+                        <button onclick="resetDrawState()" class="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-sm transition">
+                            같은 인원으로 다시 추첨
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 추첨 시작 메인 버튼 -->
+            <div class="mt-6">
+                <button id="startDrawBtn" onclick="startLottoDraw()" class="px-10 py-4 rounded-2xl bg-gradient-to-r from-amber-500 via-orange-500 to-rose-500 hover:from-amber-600 hover:to-rose-600 text-white font-jua text-xl sm:text-2xl tracking-wider shadow-xl shadow-orange-500/30 active:scale-95 transition transform">
+                    🎱 추첨 시작!
+                </button>
+            </div>
+
+            <!-- 지금까지 뽑힌 당첨자 히스토리 -->
+            <div id="historySection" class="hidden mt-6 pt-4 border-t border-slate-100">
+                <p class="text-xs font-bold text-slate-400 mb-2">이전 당첨 기록</p>
+                <div id="winnerHistoryList" class="flex flex-wrap justify-center gap-2"></div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- 하단 푸터 -->
+    <footer class="w-full max-w-4xl text-center text-xs text-slate-400 mt-4 py-2">
+        번호표는 1번부터 최대 40번까지 지원하며, 공 색상은 번호 구간별로 다르게 표시됩니다.
+    </footer>
+
+    <script>
+        /**
+         * 전역 상태 관리 변수
+         */
+        let totalStudents = 20;            // 설정된 전체 학생 수 (최대 40)
+        let selectedNumbers = new Set();   // 학생들이 선택한 번호 집합
+        let winnerHistory = [];            // 당첨된 번호 기록
+        let isDrawing = false;             // 현재 추첨 애니메이션 진행 여부
+        let soundEnabled = true;           // 효과음 활성화 여부
+
+        // 물리 엔진용 공 객체 배열 및 애니메이션 프레임 ID
+        let balls = [];
+        let animFrameId = null;
+        let spinSpeedMultiplier = 1;       // 추첨 중 회전 속도 배율
+
+        /**
+         * 번호에 따른 로또 공 색상 클래스 및 RGB 색상 반환
+         */
+        function getBallColorInfo(num) {
+            if (num <= 10) return { css: 'ball-yellow', main: '#eab308', light: '#fef08a', dark: '#a16207' };
+            if (num <= 20) return { css: 'ball-blue',   main: '#2563eb', light: '#93c5fd', dark: '#1e40af' };
+            if (num <= 30) return { css: 'ball-red',    main: '#dc2626', light: '#fca5a5', dark: '#991b1b' };
+            return { css: 'ball-gray',   main: '#4b5563', light: '#d1d5db', dark: '#1f2937' };
+        }
+
+        /**
+         * 토스트 알림 표시 (alert 대체)
+         */
+        let toastTimeout = null;
+        function showToast(msg, icon = 'ℹ️') {
+            const toastBox = document.getElementById('toastBox');
+            document.getElementById('toastMessage').textContent = msg;
+            toastBox.querySelector('span:first-child').textContent = icon;
+
+            toastBox.classList.remove('opacity-0', '-translate-y-3');
+            toastBox.classList.add('opacity-100', 'translate-y-0');
+
+            clearTimeout(toastTimeout);
+            toastTimeout = setTimeout(() => {
+                toastBox.classList.remove('opacity-100', 'translate-y-0');
+                toastBox.classList.add('opacity-0', '-translate-y-3');
+            }, 2500);
+        }
+
+        /**
+         * Tone.js 기반 사운드 합성 (외부 파일 없이 깔끔한 효과음 생성)
+         */
+        let synth = null;
+        function initAudio() {
+            if (!synth && typeof Tone !== 'undefined') {
+                synth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: 'triangle' },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.2 }
+                }).toDestination();
+                synth.volume.value = -8;
+            }
+        }
+
+        function playPopSound(isSelect = true) {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (Tone.context.state !== 'running') Tone.start();
+                synth.triggerAttackRelease(isSelect ? 'C5' : 'G4', '32n');
+            } catch (e) {}
+        }
+
+        function playBounceSound() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (Tone.context.state !== 'running') Tone.start();
+                const notes = ['C4', 'D4', 'E4', 'G4', 'A4', 'C5'];
+                const randomNote = notes[Math.floor(Math.random() * notes.length)];
+                synth.triggerAttackRelease(randomNote, '64n');
+            } catch (e) {}
+        }
+
+        function playWinFanfare() {
+            if (!soundEnabled) return;
+            try {
+                initAudio();
+                if (Tone.context.state !== 'running') Tone.start();
+                const now = Tone.now();
+                synth.triggerAttackRelease('C5', '16n', now);
+                synth.triggerAttackRelease('E5', '16n', now + 0.1);
+                synth.triggerAttackRelease('G5', '16n', now + 0.2);
+                synth.triggerAttackRelease('C6', '4n',  now + 0.32);
+            } catch (e) {}
+        }
+
+        function toggleSound() {
+            soundEnabled = !soundEnabled;
+            document.getElementById('soundIcon').textContent = soundEnabled ? '🔊' : '🔇';
+            document.getElementById('soundText').textContent = soundEnabled ? '효과음 ON' : '효과음 OFF';
+            if (soundEnabled) playPopSound(true);
+        }
+
+        /**
+         * [STEP 1] 인원 수 설정 관련 함수
+         */
+        function adjustCount(delta) {
+            const input = document.getElementById('studentCountInput');
+            let val = parseInt(input.value) || 20;
+            val = Math.min(40, Math.max(2, val + delta));
+            input.value = val;
+            playPopSound(true);
+        }
+
+        function setQuickCount(num) {
+            document.getElementById('studentCountInput').value = num;
+            playPopSound(true);
+        }
+
+        function validateCountInput() {
+            const input = document.getElementById('studentCountInput');
+            let val = parseInt(input.value);
+            if (isNaN(val) || val < 2) val = 2;
+            if (val > 40) {
+                val = 40;
+                showToast('최대 40명까지만 설정할 수 있습니다.', '⚠️');
+            }
+            input.value = val;
+        }
+
+        function goToSelectionStep() {
+            validateCountInput();
+            totalStudents = parseInt(document.getElementById('studentCountInput').value);
+            selectedNumbers.clear();
+            winnerHistory = [];
+
+            renderTicketGrid();
+            updateSelectionBadges();
+
+            document.getElementById('stepSetup').classList.add('hidden');
+            document.getElementById('stepSelection').classList.remove('hidden');
+            playPopSound(true);
+        }
+
+        /**
+         * [STEP 2] 번호표 선택 그리드 렌더링 및 상호작용
+         */
+        function renderTicketGrid() {
+            const grid = document.getElementById('ticketGrid');
+            grid.innerHTML = '';
+
+            for (let i = 1; i <= totalStudents; i++) {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.id = `ticket-${i}`;
+                btn.textContent = i;
+                btn.className = 'lotto-ball ticket-unselected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none';
+                btn.onclick = () => toggleTicket(i);
+                grid.appendChild(btn);
+            }
+        }
+
+        function toggleTicket(num) {
+            const btn = document.getElementById(`ticket-${num}`);
+            const colorInfo = getBallColorInfo(num);
+
+            if (selectedNumbers.has(num)) {
+                selectedNumbers.delete(num);
+                btn.className = 'lotto-ball ticket-unselected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none';
+                playPopSound(false);
+            } else {
+                selectedNumbers.add(num);
+                btn.className = `lotto-ball ${colorInfo.css} ticket-selected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none`;
+                playPopSound(true);
+            }
+
+            updateSelectionBadges();
+        }
+
+        function toggleSelectAll() {
+            if (selectedNumbers.size === totalStudents) {
+                // 모두 해제
+                selectedNumbers.clear();
+                for (let i = 1; i <= totalStudents; i++) {
+                    const btn = document.getElementById(`ticket-${i}`);
+                    btn.className = 'lotto-ball ticket-unselected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none';
+                }
+                playPopSound(false);
+            } else {
+                // 모두 선택
+                for (let i = 1; i <= totalStudents; i++) {
+                    selectedNumbers.add(i);
+                    const btn = document.getElementById(`ticket-${i}`);
+                    const colorInfo = getBallColorInfo(i);
+                    btn.className = `lotto-ball ${colorInfo.css} ticket-selected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none`;
+                }
+                playPopSound(true);
+            }
+            updateSelectionBadges();
+        }
+
+        function updateSelectionBadges() {
+            const count = selectedNumbers.size;
+            document.getElementById('selectedCountBadge').textContent = count;
+            document.getElementById('totalCountBadge').textContent = totalStudents;
+            document.getElementById('btnBallCount').textContent = `${count}개`;
+
+            const selectAllBtn = document.getElementById('selectAllBtn');
+            selectAllBtn.textContent = (count === totalStudents) ? '선택 해제' : '전체 선택';
+        }
+
+        function backToSetup() {
+            document.getElementById('stepSelection').classList.add('hidden');
+            document.getElementById('stepSetup').classList.remove('hidden');
+        }
+
+        /**
+         * [STEP 3] 추첨기 화면 진입 및 캔버스 물리 시뮬레이션
+         */
+        function goToDrawStep() {
+            if (selectedNumbers.size < 2) {
+                showToast('최소 2명 이상 번호를 선택해야 추첨할 수 있습니다!', '⚠️');
+                return;
+            }
+
+            document.getElementById('stepSelection').classList.add('hidden');
+            document.getElementById('stepDraw').classList.remove('hidden');
+
+            resetDrawState();
+            initCanvasBalls();
+            playPopSound(true);
+        }
+
+        function backToSelection() {
+            if (isDrawing) return;
+            stopCanvasAnimation();
+            document.getElementById('stepDraw').classList.add('hidden');
+            document.getElementById('stepSelection').classList.remove('hidden');
+        }
+
+        /**
+         * 캔버스 크기 반응형 조정 및 로또 공 물리 객체 초기화
+         */
+        function initCanvasBalls() {
+            const canvas = document.getElementById('lottoCanvas');
+            const wrapper = document.getElementById('domeWrapper');
+            const size = wrapper.clientWidth;
+
+            // 고해상도 디스플레이(Retina) 대응
+            const dpr = window.devicePixelRatio || 1;
+            canvas.width = size * dpr;
+            canvas.height = size * dpr;
+
+            const ctx = canvas.getContext('2d');
+            ctx.scale(dpr, dpr);
+
+            const centerX = size / 2;
+            const centerY = size / 2;
+            const domeRadius = (size / 2) - 8;
+
+            // 공 개수에 따라 반지름 유동적 조절
+            const count = selectedNumbers.size;
+            const ballRadius = count <= 10 ? 22 : (count <= 25 ? 18 : 15);
+
+            balls = Array.from(selectedNumbers).map((num) => {
+                // 돔 안쪽 랜덤 위치에 배치
+                const angle = Math.random() * Math.PI * 2;
+                const dist = Math.random() * (domeRadius - ballRadius - 10);
+                return {
+                    num: num,
+                    x: centerX + Math.cos(angle) * dist,
+                    y: centerY + Math.sin(angle) * dist,
+                    vx: (Math.random() - 0.5) * 3,
+                    vy: (Math.random() - 0.5) * 3,
+                    radius: ballRadius,
+                    color: getBallColorInfo(num),
+                    rotation: Math.random() * Math.PI * 2,
+                    vRot: (Math.random() - 0.5) * 0.1
+                };
+            });
+
+            document.getElementById('machineBallCount').textContent = balls.length;
+            spinSpeedMultiplier = 1;
+            startCanvasLoop();
+        }
+
+        function startCanvasLoop() {
+            stopCanvasAnimation();
+            const canvas = document.getElementById('lottoCanvas');
+            const ctx = canvas.getContext('2d');
+
+            function updateAndDraw() {
+                const wrapper = document.getElementById('domeWrapper');
+                const size = wrapper.clientWidth;
+                const centerX = size / 2;
+                const centerY = size / 2;
+                const domeRadius = (size / 2) - 6;
+
+                ctx.clearRect(0, 0, size, size);
+
+                // 공 물리 업데이트
+                for (let i = 0; i < balls.length; i++) {
+                    const b = balls[i];
+
+                    if (isDrawing) {
+                        // 추첨 중에는 아래에서 강한 바람이 불어 공들이 솟구치고 소용돌이치는 효과
+                        b.vy -= 0.45 * spinSpeedMultiplier;
+                        // 소용돌이 회전력 추가
+                        const dxCenter = b.x - centerX;
+                        const dyCenter = b.y - centerY;
+                        b.vx += (-dyCenter * 0.008 + (Math.random() - 0.5) * 1.8) * spinSpeedMultiplier;
+                        b.vy += (dxCenter * 0.008 + (Math.random() - 0.5) * 1.8) * spinSpeedMultiplier;
+                    } else {
+                        // 대기 상태에서는 중력으로 아래쪽에 모여 살랑살랑 움직임
+                        b.vy += 0.25;
+                        b.vx *= 0.98;
+                        b.vy *= 0.98;
+                    }
+
+                    // 최고 속도 제한
+                    const maxSpeed = isDrawing ? 14 : 4;
+                    const speed = Math.hypot(b.vx, b.vy);
+                    if (speed > maxSpeed) {
+                        b.vx = (b.vx / speed) * maxSpeed;
+                        b.vy = (b.vy / speed) * maxSpeed;
+                    }
+
+                    b.x += b.vx;
+                    b.y += b.vy;
+                    b.rotation += b.vRot * (isDrawing ? 4 : 1);
+
+                    // 원형 유리 돔 벽면 충돌 처리
+                    const distFromCenter = Math.hypot(b.x - centerX, b.y - centerY);
+                    const maxAllowedDist = domeRadius - b.radius;
+
+                    if (distFromCenter > maxAllowedDist) {
+                        const nx = (b.x - centerX) / distFromCenter;
+                        const ny = (b.y - centerY) / distFromCenter;
+
+                        // 위치 보정
+                        b.x = centerX + nx * maxAllowedDist;
+                        b.y = centerY + ny * maxAllowedDist;
+
+                        // 반사 벡터 계산
+                        const dot = b.vx * nx + b.vy * ny;
+                        const restitution = isDrawing ? 0.92 : 0.6;
+                        b.vx = (b.vx - 2 * dot * nx) * restitution;
+                        b.vy = (b.vy - 2 * dot * ny) * restitution;
+                    }
+                }
+
+                // 공끼리의 탄성 충돌 처리
+                for (let i = 0; i < balls.length; i++) {
+                    for (let j = i + 1; j < balls.length; j++) {
+                        const b1 = balls[i];
+                        const b2 = balls[j];
+                        const dx = b2.x - b1.x;
+                        const dy = b2.y - b1.y;
+                        const dist = Math.hypot(dx, dy);
+                        const minDist = b1.radius + b2.radius;
+
+                        if (dist < minDist && dist > 0) {
+                            const nx = dx / dist;
+                            const ny = dy / dist;
+                            const overlap = (minDist - dist) / 2;
+
+                            b1.x -= nx * overlap;
+                            b1.y -= ny * overlap;
+                            b2.x += nx * overlap;
+                            b2.y += ny * overlap;
+
+                            // 속도 교환
+                            const dvx = b2.vx - b1.vx;
+                            const dvy = b2.vy - b1.vy;
+                            const velAlongNormal = dvx * nx + dvy * ny;
+
+                            if (velAlongNormal < 0) {
+                                const restitution = 0.85;
+                                const impulse = -(1 + restitution) * velAlongNormal / 2;
+                                b1.vx -= impulse * nx;
+                                b1.vy -= impulse * ny;
+                                b2.vx += impulse * nx;
+                                b2.vy += impulse * ny;
+                            }
+                        }
+                    }
+                }
+
+                // 공 그리기
+                for (const b of balls) {
+                    drawSingleBall(ctx, b);
+                }
+
+                animFrameId = requestAnimationFrame(updateAndDraw);
+            }
+
+            updateAndDraw();
+        }
+
+        function drawSingleBall(ctx, b) {
+            ctx.save();
+            ctx.translate(b.x, b.y);
+
+            // 공 그림자
+            ctx.beginPath();
+            ctx.arc(2, 3, b.radius, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+            ctx.fill();
+
+            // 입체 그라데이션 공 본체
+            const grad = ctx.createRadialGradient(
+                -b.radius * 0.3, -b.radius * 0.3, b.radius * 0.1,
+                0, 0, b.radius
+            );
+            grad.addColorStop(0, b.color.light);
+            grad.addColorStop(0.55, b.color.main);
+            grad.addColorStop(1, b.color.dark);
+
+            ctx.beginPath();
+            ctx.arc(0, 0, b.radius, 0, Math.PI * 2);
+            ctx.fillStyle = grad;
+            ctx.fill();
+
+            // 번호가 적힌 흰색 원형 라벨 (로또 공 디테일)
+            ctx.beginPath();
+            ctx.arc(0, 0, b.radius * 0.62, 0, Math.PI * 2);
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.92)';
+            ctx.fill();
+
+            // 번호 텍스트
+            ctx.fillStyle = '#1e293b';
+            ctx.font = `900 ${Math.floor(b.radius * 0.78)}px "Noto Sans KR", sans-serif`;
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(b.num, 0, 1);
+
+            ctx.restore();
+        }
+
+        function stopCanvasAnimation() {
+            if (animFrameId) {
+                cancelAnimationFrame(animFrameId);
+                animFrameId = null;
+            }
+        }
+
+        /**
+         * 로또 추첨 시작 및 당첨자 발표 연출
+         */
+        let soundInterval = null;
+        function startLottoDraw() {
+            if (isDrawing) return;
+            if (selectedNumbers.size === 0) return;
+
+            isDrawing = true;
+            spinSpeedMultiplier = 1.3;
+
+            // UI 상태 변경
+            const startBtn = document.getElementById('startDrawBtn');
+            const backBtn = document.getElementById('backToSelectBtn');
+            startBtn.disabled = true;
+            startBtn.classList.add('opacity-50', 'cursor-not-allowed');
+            startBtn.textContent = '🌪️ 공을 열심히 섞는 중...';
+            backBtn.classList.add('invisible');
+
+            document.getElementById('drawStatusTitle').textContent = '두구두구두구... 누가 뽑힐까요?';
+            document.getElementById('drawStatusSub').textContent = '로또 추첨기가 힘차게 돌아가고 있습니다!';
+
+            // 공 부딪히는 경쾌한 효과음 루프
+            soundInterval = setInterval(() => {
+                playBounceSound();
+            }, 140);
+
+            // 3.2초 후 당첨자 선정 및 공개
+            setTimeout(() => {
+                clearInterval(soundInterval);
+                isDrawing = false;
+
+                // 완전 무작위 당첨 번호 추출
+                const candidates = Array.from(selectedNumbers);
+                const winnerNum = candidates[Math.floor(Math.random() * candidates.length)];
+
+                revealWinner(winnerNum);
+            }, 3200);
+        }
+
+        function revealWinner(winnerNum) {
+            const colorInfo = getBallColorInfo(winnerNum);
+
+            // 당첨 결과 오버레이 세팅
+            const overlay = document.getElementById('winnerOverlay');
+            const ballDisplay = document.getElementById('winnerBallDisplay');
+            const numText = document.getElementById('winnerNumberText');
+
+            ballDisplay.className = `lotto-ball ${colorInfo.css} w-28 h-28 sm:w-36 sm:h-36 text-5xl sm:text-6xl mb-4 winner-reveal shadow-2xl`;
+            ballDisplay.textContent = winnerNum;
+            numText.textContent = `${winnerNum}번`;
+
+            overlay.classList.remove('hidden');
+
+            // 남은 인원이 2명 이상일 때만 '당첨자 빼고 한 명 더 뽑기' 활성화
+            const excludeBtn = document.getElementById('excludeWinnerBtn');
+            if (selectedNumbers.size > 2) {
+                excludeBtn.classList.remove('hidden');
+            } else {
+                excludeBtn.classList.add('hidden');
+            }
+
+            // 기록 추가
+            if (!winnerHistory.includes(winnerNum)) {
+                winnerHistory.push(winnerNum);
+                updateWinnerHistoryUI();
+            }
+
+            // 축하 팡파르 및 폭죽 효과
+            playWinFanfare();
+            if (typeof confetti === 'function') {
+                confetti({
+                    particleCount: 90,
+                    spread: 70,
+                    origin: { y: 0.6 }
+                });
+            }
+
+            // 버튼 복구
+            const startBtn = document.getElementById('startDrawBtn');
+            const backBtn = document.getElementById('backToSelectBtn');
+            startBtn.disabled = false;
+            startBtn.classList.remove('opacity-50', 'cursor-not-allowed');
+            startBtn.textContent = '🎱 추첨 시작!';
+            backBtn.classList.remove('invisible');
+        }
+
+        function resetDrawState() {
+            document.getElementById('winnerOverlay').classList.add('hidden');
+            document.getElementById('drawStatusTitle').textContent = '추첨 준비 완료!';
+            document.getElementById('drawStatusSub').textContent = '아래 [추첨 시작!] 버튼을 누르면 공이 섞이며 당첨 번호가 나옵니다.';
+        }
+
+        function excludeWinnerAndRedraw() {
+            const lastWinner = winnerHistory[winnerHistory.length - 1];
+            if (lastWinner && selectedNumbers.has(lastWinner)) {
+                selectedNumbers.delete(lastWinner);
+
+                // 선택 화면의 해당 번호표도 해제 처리
+                const btn = document.getElementById(`ticket-${lastWinner}`);
+                if (btn) {
+                    btn.className = 'lotto-ball ticket-unselected w-12 h-12 sm:w-14 sm:h-14 text-lg sm:text-xl cursor-pointer focus:outline-none';
+                }
+                updateSelectionBadges();
+            }
+
+            resetDrawState();
+            initCanvasBalls();
+            showToast(`${lastWinner}번 학생을 제외하고 다시 준비했습니다.`, '✅');
+        }
+
+        function updateWinnerHistoryUI() {
+            const section = document.getElementById('historySection');
+            const list = document.getElementById('winnerHistoryList');
+            if (winnerHistory.length === 0) {
+                section.classList.add('hidden');
+                return;
+            }
+
+            section.classList.remove('hidden');
+            list.innerHTML = '';
+
+            winnerHistory.forEach((num, idx) => {
+                const colorInfo = getBallColorInfo(num);
+                const badge = document.createElement('div');
+                badge.className = 'flex items-center gap-1.5 bg-slate-100 px-3 py-1 rounded-full text-xs font-bold text-slate-700';
+                badge.innerHTML = `
+                    <span class="text-slate-400">${idx + 1}순위</span>
+                    <span class="lotto-ball ${colorInfo.css} w-6 h-6 text-xs">${num}</span>
+                `;
+                list.appendChild(badge);
+            });
+        }
+
+        /**
+         * 전체 초기화 (처음 화면으로)
+         */
+        function resetAll() {
+            if (isDrawing) return;
+            stopCanvasAnimation();
+            selectedNumbers.clear();
+            winnerHistory = [];
+
+            document.getElementById('stepSelection').classList.add('hidden');
+            document.getElementById('stepDraw').classList.add('hidden');
+            document.getElementById('winnerOverlay').classList.add('hidden');
+            document.getElementById('historySection').classList.add('hidden');
+            document.getElementById('stepSetup').classList.remove('hidden');
+
+            showToast('처음 상태로 초기화되었습니다.', '🔄');
+        }
+
+        // 창 크기 변경 시 캔버스 비율 유지
+        window.addEventListener('resize', () => {
+            if (!document.getElementById('stepDraw').classList.contains('hidden')) {
+                initCanvasBalls();
+            }
+        });
+    </script>
+</body>
+</html>
