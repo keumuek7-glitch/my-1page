@@ -1,0 +1,614 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>발표일 추첨기</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@500;600&family=IBM+Plex+Sans+KR:wght@400;500;600;700&display=swap">
+<style>
+/* Layout: four date columns, the same grid for input (names under each date) and for the lottery result */
+:root {
+  --bg: #F2F4F7;
+  --surface: #FFFFFF;
+  --fg: #1A222D;
+  --muted: #5B6776;
+  --line: #D5DBE3;
+  --accent: #1F5A8A;
+  --accent-fg: #FFFFFF;
+  --accent-soft: #E3EEF7;
+  --warn: #8A4F00;
+  --warn-soft: #FBEBD0;
+  --nv: #4A5486;
+  --nv-soft: #E6E9F6;
+  --danger: #A12B2B;
+  --danger-soft: #FBE4E4;
+  --font-body: 'IBM Plex Sans KR', system-ui, 'Apple SD Gothic Neo', 'Malgun Gothic', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'SFMono-Regular', Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #11161C;
+    --surface: #1A212A;
+    --fg: #E7EBF0;
+    --muted: #9AA6B5;
+    --line: #2D3744;
+    --accent: #7FB8E6;
+    --accent-fg: #0E1620;
+    --accent-soft: #1B2A38;
+    --warn: #F0B766;
+    --warn-soft: #3A2C14;
+    --nv: #A9B4F0;
+    --nv-soft: #252A44;
+    --danger: #F29A9A;
+    --danger-soft: #40201F;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #11161C;
+  --surface: #1A212A;
+  --fg: #E7EBF0;
+  --muted: #9AA6B5;
+  --line: #2D3744;
+  --accent: #7FB8E6;
+  --accent-fg: #0E1620;
+  --accent-soft: #1B2A38;
+  --warn: #F0B766;
+  --warn-soft: #3A2C14;
+  --nv: #A9B4F0;
+  --nv-soft: #252A44;
+  --danger: #F29A9A;
+  --danger-soft: #40201F;
+  color-scheme: dark;
+}
+
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-body);
+  font-size: 15px;
+  line-height: 1.55;
+  padding-block: 24px 48px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px));
+  padding-right: max(16px, env(safe-area-inset-right, 0px));
+}
+.wrap { max-width: 1040px; margin: 0 auto; display: flex; flex-direction: column; gap: 32px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+h1 { font-size: 1.65rem; line-height: 1.25; font-weight: 700; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 1.1rem; font-weight: 600; margin: 0; }
+h3 { font-size: 1rem; font-weight: 600; margin: 0; overflow-wrap: anywhere; }
+.lead { margin: 0; color: var(--muted); max-width: 65ch; }
+
+section { display: flex; flex-direction: column; gap: 12px; }
+.sec-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 16px; }
+.hint { margin: 0; color: var(--muted); font-size: 0.875rem; }
+
+.note {
+  margin: 0; padding: 8px 12px; border-radius: 8px;
+  background: var(--accent-soft); color: var(--fg); font-size: 0.875rem;
+}
+
+.grid { display: grid; grid-template-columns: 1fr; gap: 12px; }
+@media (min-width: 560px) { .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (min-width: 900px) { .grid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.col {
+  background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.col-head { display: flex; flex-direction: column; gap: 8px; }
+.col-head.row { flex-direction: row; align-items: baseline; justify-content: space-between; gap: 8px; }
+
+input, textarea, button { font: inherit; color: inherit; }
+.label-input, .cap-input, textarea {
+  background: var(--bg); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px;
+  box-sizing: border-box;
+}
+.label-input { width: 100%; font-weight: 600; }
+.cap { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 0.875rem; }
+.cap-input { width: 4.25rem; font-family: var(--font-mono); font-weight: 500; text-align: right; }
+textarea { width: 100%; min-height: 11rem; resize: vertical; line-height: 1.5; }
+.col.nv textarea { min-height: 5rem; }
+input:focus-visible, textarea:focus-visible, button:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+.count { margin: 0; font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.count.over { color: var(--warn); font-weight: 600; }
+
+.totals { margin: 0; font-size: 0.875rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.totals.mismatch { color: var(--warn); font-weight: 600; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.btn {
+  border: 1px solid var(--line); background: var(--surface); border-radius: 8px;
+  padding: 8px 16px; cursor: pointer; font-weight: 500;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-fg); border-color: var(--accent); font-weight: 600; }
+
+.status { margin: 0; padding: 8px 12px; border-radius: 8px; font-size: 0.875rem; background: var(--accent-soft); }
+.status:empty { display: none; }
+.status.err { background: var(--danger-soft); color: var(--danger); font-weight: 500; }
+.status.warn { background: var(--warn-soft); color: var(--warn); font-weight: 500; }
+
+.summary { display: flex; flex-direction: column; gap: 2px; }
+.summary p { margin: 0; }
+.ratio-label { font-size: 0.8125rem; color: var(--muted); letter-spacing: 0.04em; }
+.ratio { font-family: var(--font-mono); font-weight: 600; font-size: 2rem; line-height: 1.2; font-variant-numeric: tabular-nums; }
+.ratio-sub { font-size: 0.875rem; color: var(--muted); }
+
+.stale .res-body { opacity: 0.45; }
+.res-body { display: flex; flex-direction: column; gap: 16px; }
+.cnt { font-family: var(--font-mono); font-weight: 600; color: var(--accent); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.sub { margin: 0; font-size: 0.8125rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.names { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; }
+.names li {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between;
+  gap: 2px 8px; padding: 6px 8px; border-radius: 6px; background: var(--bg); min-width: 0;
+}
+.names .nm { overflow-wrap: anywhere; }
+.tag { font-size: 0.75rem; font-weight: 600; padding: 1px 8px; border-radius: 999px; white-space: nowrap; }
+.tag.moved { background: var(--warn-soft); color: var(--warn); }
+.tag.nv { background: var(--nv-soft); color: var(--nv); }
+.empty-slot { color: var(--muted); font-size: 0.875rem; padding: 6px 8px; }
+
+.unplaced { background: var(--danger-soft); color: var(--danger); border-radius: 8px; padding: 8px 12px; font-size: 0.875rem; margin: 0; }
+
+.scan {
+  background: var(--surface); border: 1px dashed var(--line); border-radius: 10px;
+  padding: 12px; display: flex; flex-direction: column; gap: 8px; min-width: 0;
+}
+.scan-head .hint { margin-top: 4px; max-width: 70ch; }
+.scan-row { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.scan-row input[type="file"] { font-size: 0.875rem; max-width: 100%; min-width: 0; }
+.uncertain { background: var(--warn-soft); color: var(--warn); border-radius: 8px; padding: 8px 12px; font-size: 0.875rem; }
+.uncertain .u-title { margin: 0 0 4px; font-weight: 600; }
+.uncertain ul { margin: 0; padding-left: 1.2em; }
+.uncertain li { overflow-wrap: anywhere; }
+
+.copy-block { display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+.copy-block textarea { min-height: 6rem; font-size: 0.875rem; }
+.copied { font-size: 0.875rem; color: var(--muted); }
+</style>
+
+<div class="wrap">
+  <header>
+    <h1>발표일 추첨기</h1>
+    <p class="lead">이클래스 투표 결과를 날짜별로 붙여 넣고 추첨하면, 신청이 정원을 넘은 날짜의 신청자 중 일부가 추첨으로 다른 날짜로 이동합니다. 정원은 앞의 두 날짜가 8명, 뒤의 두 날짜가 7명입니다. 투표하지 않은 학생은 남은 빈자리에 임의로 배정됩니다.</p>
+  </header>
+
+  <section id="inputSection" aria-labelledby="h-input">
+    <div class="sec-head">
+      <h2 id="h-input">투표 결과</h2>
+      <p class="hint">날짜 이름과 정원은 바꿀 수 있습니다. 희망자 이름은 한 줄에 한 명씩 넣으세요.</p>
+    </div>
+    <p class="note" id="exampleNote">지금 들어 있는 명단은 예시입니다. 모두 비우기를 누른 뒤 실제 명단을 붙여 넣으세요.</p>
+    <div class="scan" id="scanBox" hidden>
+      <div class="scan-head">
+        <h3>스캔 파일로 채우기</h3>
+        <p class="hint">투표 결과를 스캔한 이미지(JPG, PNG, WebP, GIF)를 고르면 날짜별 칸에 이름을 채웁니다. 이미지는 이름을 읽기 위해 Claude에게 전송되고, 날짜별 이름 칸은 읽은 내용으로 바뀝니다. 투표하지 않은 학생은 아래 칸에 직접 넣으세요.</p>
+      </div>
+      <div class="scan-row">
+        <label for="scanFile" class="sr">스캔 이미지 파일</label>
+        <input type="file" id="scanFile" multiple accept="image/jpeg,image/png,image/webp,image/gif">
+        <button type="button" class="btn primary" id="scanRun">이름 읽기</button>
+        <button type="button" class="btn" id="scanStop" hidden>중지</button>
+      </div>
+      <p class="status" id="scanStatus" role="status"></p>
+      <div class="uncertain" id="scanUncertain" hidden>
+        <p class="u-title">판독이 불확실한 부분 (칸에 넣지 않았으니 확인 후 직접 추가하세요)</p>
+        <ul id="scanUncertainList"></ul>
+      </div>
+    </div>
+    <div class="grid" id="inputGrid"></div>
+    <div class="col nv">
+      <div class="col-head row">
+        <label for="nv"><h3>투표하지 않은 학생</h3></label>
+      </div>
+      <textarea id="nv" rows="3" placeholder="미투표자 이름을 한 줄에 한 명씩" spellcheck="false"></textarea>
+      <p class="count" id="nvCount"></p>
+    </div>
+    <p class="totals" id="totals"></p>
+    <div class="actions">
+      <button type="button" class="btn primary" id="drawBtn">추첨하기</button>
+      <button type="button" class="btn" id="exampleBtn">예시 불러오기</button>
+      <button type="button" class="btn" id="clearBtn">모두 비우기</button>
+    </div>
+  </section>
+
+  <section id="resultSection" aria-labelledby="h-result">
+    <h2 id="h-result">추첨 결과</h2>
+    <p class="status" id="status" role="status"></p>
+    <div class="res-body" id="resultBody"></div>
+  </section>
+</div>
+
+<script>
+(function () {
+  var N = 4;
+  var DEF_CAPS = [8, 8, 7, 7];
+  var $ = function (id) { return document.getElementById(id); };
+
+  function h(tag, props) {
+    var e = document.createElement(tag);
+    if (props) {
+      Object.keys(props).forEach(function (k) {
+        if (k === 'class') e.className = props[k];
+        else if (k === 'text') e.textContent = props[k];
+        else e.setAttribute(k, props[k]);
+      });
+    }
+    for (var i = 2; i < arguments.length; i++) {
+      var kid = arguments[i];
+      if (kid != null) e.append(kid);
+    }
+    return e;
+  }
+
+  /* ---------- 입력 칸 만들기 ---------- */
+  var grid = $('inputGrid');
+  for (var i = 0; i < N; i++) {
+    grid.appendChild(
+      h('div', { class: 'col' },
+        h('div', { class: 'col-head' },
+          h('label', { 'for': 'label' + i, class: 'sr', text: '날짜 ' + (i + 1) + ' 이름' }),
+          h('input', { id: 'label' + i, class: 'label-input', type: 'text', value: '날짜 ' + (i + 1), maxlength: '20' }),
+          h('div', { class: 'cap' },
+            h('label', { 'for': 'cap' + i, text: '정원' }),
+            h('input', { id: 'cap' + i, class: 'cap-input', type: 'number', min: '0', max: '99', value: String(DEF_CAPS[i]), inputmode: 'numeric' }),
+            h('span', { text: '명' })
+          )
+        ),
+        h('label', { 'for': 'names' + i, class: 'sr', text: '날짜 ' + (i + 1) + ' 희망자 이름' }),
+        h('textarea', { id: 'names' + i, rows: '10', placeholder: '희망자 이름을 한 줄에 한 명씩', spellcheck: 'false' }),
+        h('p', { class: 'count', id: 'count' + i })
+      )
+    );
+  }
+
+  /* ---------- 유틸 ---------- */
+  function parse(text) {
+    return text.split(/[\r\n\t,]+/).map(function (s) { return s.trim(); }).filter(Boolean);
+  }
+
+  var hasCrypto = typeof crypto !== 'undefined' && typeof crypto.getRandomValues === 'function';
+  function rnd(n) {
+    if (!hasCrypto) return Math.floor(Math.random() * n);
+    var a = new Uint32Array(1);
+    var lim = Math.floor(4294967296 / n) * n;
+    do { crypto.getRandomValues(a); } while (a[0] >= lim);
+    return a[0] % n;
+  }
+  function shuffle(arr) {
+    var a = arr.slice();
+    for (var i = a.length - 1; i > 0; i--) {
+      var j = rnd(i + 1);
+      var t = a[i]; a[i] = a[j]; a[j] = t;
+    }
+    return a;
+  }
+
+  function getData() {
+    var dates = [];
+    for (var i = 0; i < N; i++) {
+      var raw = $('cap' + i).value;
+      dates.push({
+        label: $('label' + i).value.trim() || ('날짜 ' + (i + 1)),
+        cap: raw === '' ? NaN : Number(raw),
+        names: parse($('names' + i).value)
+      });
+    }
+    return { dates: dates, nv: parse($('nv').value) };
+  }
+
+  /* ---------- 인원 표시 ---------- */
+  function updateCounts() {
+    var d = getData();
+    var total = d.nv.length, sumCap = 0;
+    d.dates.forEach(function (x, i) {
+      var c = $('count' + i);
+      var over = x.names.length > x.cap;
+      c.textContent = x.names.length + '명 신청' + (isNaN(x.cap) ? '' : ' · 정원 ' + x.cap + '명') + (over ? ' · ' + (x.names.length - x.cap) + '명 초과' : '');
+      c.className = 'count' + (over ? ' over' : '');
+      total += x.names.length;
+      sumCap += isNaN(x.cap) ? 0 : x.cap;
+    });
+    $('nvCount').textContent = d.nv.length + '명';
+    var t = $('totals');
+    t.textContent = '입력한 학생 ' + total + '명 · 정원 합계 ' + sumCap + '명';
+    t.className = 'totals' + (total !== sumCap ? ' mismatch' : '');
+    if (total !== sumCap) t.textContent += total > sumCap ? ' (정원보다 ' + (total - sumCap) + '명 많음)' : ' (정원이 ' + (sumCap - total) + '명 남음)';
+  }
+
+  /* ---------- 추첨 ---------- */
+  function setStatus(msg, kind) {
+    var s = $('status');
+    s.textContent = msg;
+    s.className = 'status' + (kind ? ' ' + kind : '');
+  }
+
+  function draw() {
+    var d = getData();
+    var dates = d.dates, nv = d.nv;
+    var body = $('resultBody');
+
+    if (dates.some(function (x) { return !Number.isInteger(x.cap) || x.cap < 0; })) {
+      setStatus('정원은 0 이상의 정수로 입력하세요.', 'err'); return;
+    }
+    var all = [];
+    dates.forEach(function (x) { all = all.concat(x.names); });
+    all = all.concat(nv);
+    if (!all.length) { setStatus('이름을 입력한 뒤 추첨하기를 누르세요.', 'err'); return; }
+
+    var seen = {}, dup = [];
+    all.forEach(function (n) {
+      seen[n] = (seen[n] || 0) + 1;
+      if (seen[n] === 2) dup.push(n);
+    });
+    if (dup.length) {
+      setStatus('같은 이름이 두 번 이상 있습니다: ' + dup.join(', ') + '. 한 사람이 한 곳에만 들어가게 고치세요. 동명이인은 이름 뒤에 구분 표시를 붙이세요.', 'err');
+      return;
+    }
+
+    /* 1단계: 날짜별로 정원 안에서 확정, 초과분은 추첨 */
+    var confirmed = [], displaced = [];
+    dates.forEach(function (x, i) {
+      if (x.names.length <= x.cap) {
+        confirmed.push(x.names.slice());
+      } else {
+        var s = shuffle(x.names);
+        var keep = {};
+        s.slice(0, x.cap).forEach(function (n) { keep[n] = true; });
+        confirmed.push(x.names.filter(function (n) { return keep[n]; }));
+        s.slice(x.cap).forEach(function (n) { displaced.push({ name: n, from: i }); });
+      }
+    });
+
+    /* 2단계: 탈락자와 미투표자를 섞어 빈자리에 임의 배정 */
+    var pool = shuffle(displaced.concat(nv.map(function (n) { return { name: n, from: -1 }; })));
+    var slots = [];
+    dates.forEach(function (x, i) {
+      for (var k = confirmed[i].length; k < x.cap; k++) slots.push(i);
+    });
+    var assigned = confirmed.map(function (list) {
+      return list.map(function (n) { return { name: n, from: -2 }; });
+    });
+    var placed = Math.min(pool.length, slots.length);
+    for (var k = 0; k < placed; k++) assigned[slots[k]].push(pool[k]);
+    var unplaced = pool.slice(placed);
+    var vacant = slots.length - placed;
+
+    render(dates, assigned, unplaced, displaced.length, nv.length);
+
+    var msg = '추첨을 마쳤습니다.';
+    var kind = '';
+    if (unplaced.length) { msg += ' 정원이 모자라 ' + unplaced.length + '명을 배정하지 못했습니다.'; kind = 'warn'; }
+    else if (vacant) { msg += ' 빈자리가 ' + vacant + '자리 남았습니다.'; kind = 'warn'; }
+    setStatus(msg, kind);
+    $('resultSection').classList.remove('stale');
+  }
+
+  /* ---------- 결과 그리기 ---------- */
+  function render(dates, assigned, unplaced, movedCount, nvCount) {
+    var body = $('resultBody');
+    body.textContent = '';
+
+    var counts = assigned.map(function (a) { return a.length; });
+    body.appendChild(
+      h('div', { class: 'summary' },
+        h('p', { class: 'ratio-label', text: '날짜별 배정 인원' }),
+        h('p', { class: 'ratio', text: counts.join(' : ') }),
+        h('p', { class: 'ratio-sub', text: '정원 초과로 추첨에서 밀려 이동한 학생 ' + movedCount + '명 · 미투표자 배정 ' + nvCount + '명' })
+      )
+    );
+
+    var g = h('div', { class: 'grid' });
+    dates.forEach(function (x, i) {
+      var ul = h('ul', { class: 'names' });
+      assigned[i].forEach(function (p) {
+        var li = h('li', null, h('span', { class: 'nm', text: p.name }));
+        if (p.from >= 0) li.append(h('span', { class: 'tag moved', text: dates[p.from].label + '에서 이동' }));
+        else if (p.from === -1) li.append(h('span', { class: 'tag nv', text: '미투표' }));
+        ul.appendChild(li);
+      });
+      var vac = x.cap - assigned[i].length;
+      if (vac > 0) ul.appendChild(h('li', { class: 'empty-slot', text: '빈자리 ' + vac }));
+      g.appendChild(
+        h('div', { class: 'col' },
+          h('div', { class: 'col-head row' },
+            h('h3', { text: x.label }),
+            h('span', { class: 'cnt', text: assigned[i].length + '명' })
+          ),
+          h('p', { class: 'sub', text: '신청 ' + x.names.length + ' · 정원 ' + x.cap }),
+          ul
+        )
+      );
+    });
+    body.appendChild(g);
+
+    if (unplaced.length) {
+      body.appendChild(h('p', { class: 'unplaced', text: '배정하지 못한 학생: ' + unplaced.map(function (p) { return p.name; }).join(', ') }));
+    }
+
+    var lines = dates.map(function (x, i) {
+      return x.label + ' (' + assigned[i].length + '명): ' + assigned[i].map(function (p) { return p.name; }).join(', ');
+    });
+    if (unplaced.length) lines.push('미배정: ' + unplaced.map(function (p) { return p.name; }).join(', '));
+    var text = lines.join('\n');
+
+    var ta = h('textarea', { id: 'copyText', rows: '5', readonly: 'readonly', 'aria-label': '복사용 결과 텍스트' });
+    ta.value = text;
+    var msg = h('span', { class: 'copied', id: 'copyMsg' });
+    var btn = h('button', { type: 'button', class: 'btn', text: '결과 복사' });
+    btn.addEventListener('click', function () {
+      function fallback() {
+        ta.focus(); ta.select();
+        msg.textContent = '텍스트를 선택했습니다. 직접 복사하세요.';
+      }
+      try {
+        navigator.clipboard.writeText(text).then(function () {
+          msg.textContent = '복사했습니다.';
+        }, fallback);
+      } catch (e) { fallback(); }
+    });
+    body.appendChild(h('div', { class: 'copy-block' }, ta, h('div', { class: 'actions' }, btn, msg)));
+  }
+
+  /* ---------- 예시와 비우기 ---------- */
+  function pad(n) { return (n < 10 ? '0' : '') + n; }
+  function range(a, b) { var r = []; for (var i = a; i <= b; i++) r.push('학생' + pad(i)); return r; }
+  function loadExample() {
+    $('names0').value = range(1, 12).join('\n');
+    $('names1').value = range(13, 21).join('\n');
+    $('names2').value = range(22, 25).join('\n');
+    $('names3').value = range(26, 28).join('\n');
+    $('nv').value = range(29, 30).join('\n');
+    for (var i = 0; i < N; i++) {
+      $('cap' + i).value = String(DEF_CAPS[i]);
+      $('label' + i).value = '날짜 ' + (i + 1);
+    }
+    $('exampleNote').hidden = false;
+    updateCounts();
+    draw();
+  }
+  function clearAll() {
+    for (var i = 0; i < N; i++) $('names' + i).value = '';
+    $('nv').value = '';
+    $('exampleNote').hidden = true;
+    $('resultBody').textContent = '';
+    setStatus('명단을 입력한 뒤 추첨하기를 누르세요.', '');
+    $('resultSection').classList.remove('stale');
+    updateCounts();
+  }
+
+  /* ---------- 이벤트 ---------- */
+  $('drawBtn').addEventListener('click', draw);
+  $('exampleBtn').addEventListener('click', loadExample);
+  $('clearBtn').addEventListener('click', clearAll);
+  function markStale() {
+    if ($('resultBody').firstChild) {
+      $('resultSection').classList.add('stale');
+      setStatus('입력이 바뀌었습니다. 추첨하기를 눌러 결과를 갱신하세요.', 'warn');
+    }
+  }
+  $('inputSection').addEventListener('input', function (e) {
+    if (e.target && e.target.type === 'file') return;
+    if (e.target && e.target.tagName === 'TEXTAREA') $('exampleNote').hidden = true;
+    updateCounts();
+    markStale();
+  });
+
+  /* ---------- 스캔 파일 읽기 ---------- */
+  var SCAN_PROMPT = [
+    '첨부한 이미지는 수강생 발표 희망일 투표 결과를 스캔한 것입니다.',
+    '이미지에 실제로 보이는 이름과 항목만 옮기고, 보이지 않거나 확실하지 않은 내용은 지어내지 마세요.',
+    '투표 항목(날짜)별로, 그 항목을 선택한 학생 이름을 정리하세요. 항목이 표의 열이든 제목 아래의 목록이든, 이미지에 나타난 대응 관계를 그대로 따르세요.',
+    '이미지가 여러 장이면 같은 항목의 이름을 합치세요. 항목은 이미지에 나타난 순서대로 적고, 항목 이름과 학생 이름은 이미지에 적힌 대로 쓰세요.',
+    '글자를 읽기 어렵거나 어느 항목인지 불분명한 이름은 names에 넣지 말고, uncertain에 어디서 무엇이 불분명한지 한 줄로 적으세요.',
+    'JSON만 답하세요. 형식: {"options":[{"label":"항목 이름","names":["이름1","이름2"]}],"uncertain":["설명"]}'
+  ].join('\n');
+
+  var scanApi = null, scanLimits = null, scanCtl = null;
+
+  function setScan(msg, kind) {
+    var s = $('scanStatus');
+    s.textContent = msg;
+    s.className = 'status' + (kind ? ' ' + kind : '');
+  }
+  function showUncertain(list) {
+    var ul = $('scanUncertainList');
+    ul.textContent = '';
+    list.forEach(function (t) { ul.appendChild(h('li', { text: t })); });
+    $('scanUncertain').hidden = !list.length;
+  }
+  function scanErrorText(e) {
+    switch (e && e.code) {
+      case 'cancelled': return '읽기를 중지했습니다.';
+      case 'not_granted': return 'Claude 사용을 허용하지 않아 스캔을 읽을 수 없습니다. 이름을 직접 붙여 넣으세요.';
+      case 'sampling_disabled': return '이 계정에서는 Claude를 사용할 수 없어 스캔을 읽을 수 없습니다. 이름을 직접 붙여 넣으세요.';
+      case 'rate_limited': return '요청이 너무 많거나 사용 한도에 도달했습니다. 잠시 뒤에 다시 눌러 주세요.';
+      case 'image_rejected': return '이미지를 읽을 수 없습니다. 파일 형식과 크기를 확인하고 다른 파일을 고르세요.';
+      case 'invalid_json': return '읽은 내용을 날짜별 명단으로 옮기지 못했습니다. 다시 눌러 보거나 더 선명하게 스캔한 파일을 사용하세요.';
+      case 'refused':
+      case 'empty_completion': return '이 이미지에서는 이름을 읽지 못했습니다. 다른 파일을 사용하거나 이름을 직접 붙여 넣으세요.';
+      default: return '읽는 중 문제가 생겼습니다. 다시 눌러 보세요.';
+    }
+  }
+  function applyScan(data) {
+    var ok = data && Array.isArray(data.options) && data.options.every(function (o) {
+      return o && Array.isArray(o.names);
+    });
+    if (!ok) { setScan('읽은 결과의 형식이 올바르지 않습니다. 다시 눌러 보세요.', 'err'); return; }
+    var opts = data.options.map(function (o) {
+      return {
+        label: String(o.label == null ? '' : o.label).trim(),
+        names: o.names.map(function (n) { return String(n).trim(); }).filter(Boolean)
+      };
+    });
+    if (opts.length !== N) {
+      setScan('투표 항목을 ' + opts.length + '개 찾았습니다' + (opts.length ? ' (' + opts.map(function (o) { return o.label || '이름 없음'; }).join(', ') + ')' : '') + '. 날짜 항목은 ' + N + '개여야 해서 칸을 채우지 않았습니다. 이미지를 확인하거나 이름을 직접 붙여 넣으세요.', 'err');
+      return;
+    }
+    var total = 0;
+    opts.forEach(function (o, i) {
+      if (o.label) $('label' + i).value = o.label;
+      $('names' + i).value = o.names.join('\n');
+      total += o.names.length;
+    });
+    $('exampleNote').hidden = true;
+    updateCounts();
+    markStale();
+    setScan(total + '명의 이름을 읽어 날짜별 칸에 채웠습니다. 이름이 맞는지 확인한 뒤 추첨하기를 누르세요.', '');
+    var unc = Array.isArray(data.uncertain) ? data.uncertain.map(function (t) { return String(t).trim(); }).filter(Boolean) : [];
+    showUncertain(unc);
+  }
+  async function readScan() {
+    if (!scanApi) return;
+    var files = Array.from($('scanFile').files || []);
+    if (!files.length) { setScan('스캔 이미지 파일을 먼저 고르세요.', 'err'); return; }
+    var max = scanLimits.images.maxCount;
+    if (files.length > max) { setScan('한 번에 ' + max + '장까지 읽을 수 있습니다.', 'err'); return; }
+    var ctl = new AbortController();
+    scanCtl = ctl;
+    $('scanRun').disabled = true;
+    $('scanStop').hidden = false;
+    showUncertain([]);
+    setScan('읽는 중입니다. 30초 이상 걸릴 수 있습니다.', '');
+    try {
+      var data = await scanApi.json(SCAN_PROMPT, { images: files, signal: ctl.signal, cache: false });
+      applyScan(data);
+    } catch (e) {
+      setScan(scanErrorText(e), e && e.code === 'cancelled' ? '' : 'err');
+    } finally {
+      $('scanRun').disabled = false;
+      $('scanStop').hidden = true;
+      scanCtl = null;
+    }
+  }
+  function initScan() {
+    if (!window.claude || typeof window.claude.use !== 'function') return;
+    window.claude.use('sample').then(function (sample) {
+      if (!sample) return null;
+      return sample.limits().then(function (lim) {
+        if (!lim || !lim.images) return;
+        scanApi = sample;
+        scanLimits = lim;
+        $('scanFile').accept = lim.images.mediaTypes.join(',');
+        $('scanBox').hidden = false;
+      });
+    }).catch(function () {});
+  }
+  $('scanRun').addEventListener('click', readScan);
+  $('scanStop').addEventListener('click', function () { if (scanCtl) scanCtl.abort(); });
+  $('scanFile').addEventListener('change', function () {
+    var n = this.files ? this.files.length : 0;
+    setScan(n ? n + '개 파일을 골랐습니다. 이름 읽기를 누르세요.' : '', '');
+    showUncertain([]);
+  });
+
+  loadExample();
+  initScan();
+})();
+</script>
+
+</body></html>
