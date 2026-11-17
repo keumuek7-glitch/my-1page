@@ -1,0 +1,714 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>마음 혈압계 - 목소리로 측정하는 오늘의 감정 수치</title>
+    <!-- Tailwind CSS 로드 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Google Fonts: Inter & Noto Sans KR & Orbitron (디지털 계기판용) -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Sans+KR:wght@400;500;700;900&family=Orbitron:wght@600;800&display=swap" rel="stylesheet">
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans KR', 'Inter', sans-serif;
+            background: linear-gradient(135deg, #f0f4f8 0%, #d9e2ec 100%);
+            min-height: 100vh;
+        }
+        .digital-font {
+            font-family: 'Orbitron', sans-serif;
+            letter-spacing: 2px;
+        }
+        .lcd-screen {
+            background: linear-gradient(180deg, #b8c9b8 0%, #a5b8a5 100%);
+            box-shadow: inset 0 4px 10px rgba(0, 0, 0, 0.25), 0 1px 0 rgba(255, 255, 255, 0.8);
+            border: 3px solid #627d98;
+        }
+        .device-body {
+            background: linear-gradient(145deg, #ffffff, #f0f4f8);
+            box-shadow: 20px 20px 60px #bec8d2, -20px -20px 60px #ffffff;
+        }
+        @keyframes pulse-ring {
+            0% { transform: scale(0.95); opacity: 0.7; }
+            50% { transform: scale(1.15); opacity: 0.2; }
+            100% { transform: scale(0.95); opacity: 0.7; }
+        }
+        .recording-ring {
+            animation: pulse-ring 1.5s infinite ease-in-out;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center p-4 sm:p-6 text-slate-800">
+
+    <!-- 메인 혈압계 디바이스 컨테이너 -->
+    <main class="w-full max-w-md device-body rounded-[2.5rem] p-6 sm:p-8 border border-white/80 relative overflow-hidden">
+        
+        <!-- 상단 헤더 -->
+        <header class="flex items-center justify-between mb-6">
+            <div class="flex items-center gap-2.5">
+                <div class="w-10 h-10 rounded-2xl bg-rose-500 text-white flex items-center justify-center shadow-md shadow-rose-200">
+                    <i data-lucide="heart-pulse" class="w-6 h-6"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-black tracking-tight text-slate-800">마음 혈압계</h1>
+                    <p class="text-xs text-slate-500 font-medium">VOICE MOOD MONITOR</p>
+                </div>
+            </div>
+            <button id="historyBtn" class="p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors" title="측정 기록 보기">
+                <i data-lucide="history" class="w-5 h-5"></i>
+            </button>
+        </header>
+
+        <!-- 디지털 LCD 모니터 화면 -->
+        <section class="lcd-screen rounded-2xl p-5 mb-6 text-slate-900 relative">
+            <!-- 상단 상태 표시줄 -->
+            <div class="flex justify-between items-center text-xs font-bold opacity-75 mb-3 border-b border-slate-700/20 pb-2">
+                <span id="statusText" class="flex items-center gap-1.5">
+                    <span class="w-2 h-2 rounded-full bg-slate-800 inline-block"></span>
+                    대기 중 (READY)
+                </span>
+                <span id="currentDate">2026.11.17</span>
+            </div>
+
+            <!-- 수치 표시 영역 -->
+            <div class="grid grid-cols-12 gap-2 items-center my-2">
+                <!-- 왼쪽: 기분 수축기/이완기 수치 -->
+                <div class="col-span-8 space-y-2">
+                    <!-- 수축기 (활력/텐션) -->
+                    <div class="flex items-baseline justify-between">
+                        <div>
+                            <span class="text-xs font-extrabold block">SYS <span class="font-normal opacity-80">활력지수</span></span>
+                            <span class="text-[10px] opacity-70">ENERGY</span>
+                        </div>
+                        <div class="digital-font text-4xl sm:text-5xl font-extrabold tracking-wider" id="sysValue">---</div>
+                    </div>
+
+                    <!-- 이완기 (안정/평온) -->
+                    <div class="flex items-baseline justify-between border-t border-slate-800/15 pt-2">
+                        <div>
+                            <span class="text-xs font-extrabold block">DIA <span class="font-normal opacity-80">안정지수</span></span>
+                            <span class="text-[10px] opacity-70">CALMNESS</span>
+                        </div>
+                        <div class="digital-font text-4xl sm:text-5xl font-extrabold tracking-wider" id="diaValue">---</div>
+                    </div>
+                </div>
+
+                <!-- 오른쪽: 맥박(설렘/두근거림) & 실시간 파형 -->
+                <div class="col-span-4 border-l border-slate-800/20 pl-3 flex flex-col justify-between h-full">
+                    <div class="text-right">
+                        <span class="text-[10px] font-bold block">PULSE</span>
+                        <span class="text-[10px] opacity-75">설렘/템포</span>
+                        <div class="digital-font text-2xl font-bold mt-1" id="pulseValue">--</div>
+                    </div>
+
+                    <!-- 실시간 오디오 비주얼라이저 캔버스 -->
+                    <div class="mt-3 bg-slate-900/10 rounded-lg p-1.5 h-12 flex items-center justify-center">
+                        <canvas id="visualizer" class="w-full h-full"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 하단 WHO 스타일 기분 게이지 바 -->
+            <div class="mt-4 pt-2 border-t border-slate-800/20">
+                <div class="flex justify-between text-[10px] font-bold mb-1 opacity-80">
+                    <span>저기압</span>
+                    <span>평온</span>
+                    <span>활기참</span>
+                    <span>과열/긴장</span>
+                </div>
+                <div class="w-full h-2.5 bg-slate-800/20 rounded-full overflow-hidden flex">
+                    <div class="w-1/4 h-full bg-blue-600/70"></div>
+                    <div class="w-1/4 h-full bg-emerald-600/70"></div>
+                    <div class="w-1/4 h-full bg-amber-500/80"></div>
+                    <div class="w-1/4 h-full bg-rose-600/80"></div>
+                </div>
+                <!-- 현재 위치 인디케이터 -->
+                <div class="relative w-full h-2 mt-0.5">
+                    <div id="gaugeIndicator" class="w-3 h-3 bg-slate-900 rotate-45 absolute -top-1 transition-all duration-700 opacity-0" style="left: 50%;"></div>
+                </div>
+            </div>
+        </section>
+
+        <!-- 진단 결과 카드 (측정 완료 시 표시) -->
+        <section id="resultCard" class="hidden mb-6 bg-white rounded-2xl p-4 border border-slate-200/80 shadow-sm transition-all">
+            <div class="flex items-center justify-between mb-2">
+                <span id="moodBadge" class="px-3 py-1 rounded-full text-xs font-bold bg-emerald-100 text-emerald-700">
+                    정상 기분 (최적 상태)
+                </span>
+                <button id="ttsBtn" class="flex items-center gap-1 text-xs font-semibold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2.5 py-1 rounded-lg transition-colors">
+                    <i data-lucide="volume-2" class="w-3.5 h-3.5"></i>
+                    <span>음성 안내</span>
+                </button>
+            </div>
+            <p id="moodSummary" class="text-sm font-bold text-slate-800 mb-1">
+                오늘 마음 혈압은 120에 80, 아주 건강한 상태입니다!
+            </p>
+            <p id="moodAdvice" class="text-xs text-slate-600 leading-relaxed">
+                목소리에서 편안하고 긍정적인 에너지가 느껴집니다. 이 좋은 리듬을 유지하며 오늘 하루를 즐겨보세요.
+            </p>
+        </section>
+
+        <!-- 안내 메시지 / 에러 알림 박스 (alert 대체) -->
+        <div id="messageBox" class="hidden mb-4 p-3 rounded-xl text-xs font-medium text-center transition-all"></div>
+
+        <!-- 측정 컨트롤 영역 -->
+        <section class="flex flex-col items-center">
+            <p id="instructionText" class="text-xs text-slate-500 text-center mb-4 font-medium">
+                버튼을 누르고 <strong>"오늘 하루 어때?"</strong>에 대해 4초간 편하게 말해보세요.
+            </p>
+
+            <div class="relative flex items-center justify-center">
+                <!-- 녹음 중 파동 효과 -->
+                <div id="pulseRing" class="hidden absolute w-24 h-24 rounded-full bg-rose-400 recording-ring"></div>
+                
+                <!-- 메인 측정 시작 버튼 -->
+                <button id="measureBtn" class="relative z-10 w-20 h-20 rounded-full bg-gradient-to-tr from-rose-500 to-pink-500 hover:from-rose-600 hover:to-pink-600 text-white shadow-xl shadow-rose-300/60 flex flex-col items-center justify-center transition-transform active:scale-95 focus:outline-none">
+                    <i data-lucide="mic" id="micIcon" class="w-8 h-8 mb-0.5"></i>
+                    <span id="btnLabel" class="text-[11px] font-bold tracking-wider">측정 시작</span>
+                </button>
+            </div>
+
+            <!-- 타이머 진행 바 -->
+            <div id="progressContainer" class="w-full max-w-[200px] h-1.5 bg-slate-200 rounded-full mt-5 overflow-hidden opacity-0 transition-opacity">
+                <div id="progressBar" class="h-full bg-rose-500 w-0 transition-all duration-100"></div>
+            </div>
+        </section>
+
+        <!-- 측정 기록 모달 (슬라이드 업 패널) -->
+        <div id="historyModal" class="hidden absolute inset-0 bg-white/95 backdrop-blur-md z-30 p-6 flex flex-col">
+            <div class="flex items-center justify-between pb-4 border-b border-slate-200">
+                <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                    <i data-lucide="clipboard-list" class="w-5 h-5 text-rose-500"></i>
+                    최근 마음 혈압 기록
+                </h2>
+                <button id="closeHistoryBtn" class="p-2 rounded-full hover:bg-slate-100 text-slate-500">
+                    <i data-lucide="x" class="w-5 h-5"></i>
+                </button>
+            </div>
+            <div id="historyList" class="flex-1 overflow-y-auto py-4 space-y-3">
+                <!-- 기록 아이템이 동적으로 삽입됨 -->
+            </div>
+            <button id="clearHistoryBtn" class="w-full py-2.5 text-xs font-semibold text-slate-500 hover:text-rose-600 border border-slate-200 rounded-xl transition-colors">
+                기록 전체 삭제
+            </button>
+        </div>
+
+    </main>
+
+    <script>
+        // 아이콘 초기화
+        lucide.createIcons();
+
+        // DOM 요소 참조
+        const measureBtn = document.getElementById('measureBtn');
+        const btnLabel = document.getElementById('btnLabel');
+        const micIcon = document.getElementById('micIcon');
+        const pulseRing = document.getElementById('pulseRing');
+        const statusText = document.getElementById('statusText');
+        const sysValue = document.getElementById('sysValue');
+        const diaValue = document.getElementById('diaValue');
+        const pulseValue = document.getElementById('pulseValue');
+        const gaugeIndicator = document.getElementById('gaugeIndicator');
+        const resultCard = document.getElementById('resultCard');
+        const moodBadge = document.getElementById('moodBadge');
+        const moodSummary = document.getElementById('moodSummary');
+        const moodAdvice = document.getElementById('moodAdvice');
+        const instructionText = document.getElementById('instructionText');
+        const progressContainer = document.getElementById('progressContainer');
+        const progressBar = document.getElementById('progressBar');
+        const messageBox = document.getElementById('messageBox');
+        const ttsBtn = document.getElementById('ttsBtn');
+        const canvas = document.getElementById('visualizer');
+        const ctx = canvas.getContext('2d');
+
+        // 기록 모달 요소
+        const historyBtn = document.getElementById('historyBtn');
+        const historyModal = document.getElementById('historyModal');
+        const closeHistoryBtn = document.getElementById('closeHistoryBtn');
+        const historyList = document.getElementById('historyList');
+        const clearHistoryBtn = document.getElementById('clearHistoryBtn');
+
+        // 상태 변수
+        let isMeasuring = false;
+        let audioContext = null;
+        let analyser = null;
+        let microphone = null;
+        let animationId = null;
+        let mediaRecorder = null;
+        let audioChunks = [];
+        let lastSpokenText = "";
+
+        // 날짜 표시 설정
+        const now = new Date();
+        document.getElementById('currentDate').textContent = 
+            `${now.getFullYear()}.${String(now.getMonth() + 1).padStart(2, '0')}.${String(now.getDate()).padStart(2, '0')}`;
+
+        // 캔버스 크기 반응형 조정
+        function resizeCanvas() {
+            const rect = canvas.parentElement.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // 메시지 박스 표시 함수 (alert 대신 사용)
+        function showMessage(text, type = 'info') {
+            messageBox.textContent = text;
+            messageBox.classList.remove('hidden', 'bg-rose-100', 'text-rose-700', 'bg-amber-100', 'text-amber-700', 'bg-slate-100', 'text-slate-700');
+            if (type === 'error') {
+                messageBox.classList.add('bg-rose-100', 'text-rose-700');
+            } else if (type === 'warning') {
+                messageBox.classList.add('bg-amber-100', 'text-amber-700');
+            } else {
+                messageBox.classList.add('bg-slate-100', 'text-slate-700');
+            }
+        }
+
+        function hideMessage() {
+            messageBox.classList.add('hidden');
+        }
+
+        // 음성 안내 (Web Speech API TTS)
+        function speakResult(text) {
+            if ('speechSynthesis' in window) {
+                window.speechSynthesis.cancel();
+                const utterance = new SpeechSynthesisUtterance(text);
+                utterance.lang = 'ko-KR';
+                utterance.rate = 1.0;
+                utterance.pitch = 1.05;
+                window.speechSynthesis.speak(utterance);
+            }
+        }
+
+        ttsBtn.addEventListener('click', () => {
+            if (lastSpokenText) speakResult(lastSpokenText);
+        });
+
+        // 측정 시작 버튼 클릭 이벤트
+        measureBtn.addEventListener('click', () => {
+            if (isMeasuring) return;
+            startMeasurement();
+        });
+
+        // 오디오 측정 및 분석 로직
+        async function startMeasurement() {
+            hideMessage();
+            resultCard.classList.add('hidden');
+
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                isMeasuring = true;
+                audioChunks = [];
+
+                // UI 상태 변경 (측정 중)
+                pulseRing.classList.remove('hidden');
+                btnLabel.textContent = '측정 중...';
+                statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-rose-600 animate-ping inline-block"></span> 가압 및 음성 분석 중...`;
+                instructionText.innerHTML = `마이크에 대고 편하게 말씀해 주세요! <strong>(4초간 측정)</strong>`;
+                progressContainer.classList.remove('opacity-0');
+                progressBar.style.width = '0%';
+                sysValue.textContent = '000';
+                diaValue.textContent = '00';
+                pulseValue.textContent = '--';
+
+                // Web Audio API 설정 (실시간 음량, 주파수 분석용)
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser();
+                microphone = audioContext.createMediaStreamSource(stream);
+                microphone.connect(analyser);
+                analyser.fftSize = 256;
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                // MediaRecorder 설정 (Gemini API 전송용 오디오 캡처)
+                mediaRecorder = new MediaRecorder(stream);
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) audioChunks.push(e.data);
+                };
+                mediaRecorder.start();
+
+                // 음향 데이터 수집 변수
+                let volumeSamples = [];
+                let pitchSamples = [];
+                const duration = 4000; // 4초 측정
+                const startTime = Date.now();
+
+                // 실시간 파형 및 수치 롤링 애니메이션
+                function updateAudioMetrics() {
+                    if (!isMeasuring) return;
+
+                    const elapsed = Date.now() - startTime;
+                    const progress = Math.min((elapsed / duration) * 100, 100);
+                    progressBar.style.width = `${progress}%`;
+
+                    analyser.getByteFrequencyData(dataArray);
+
+                    // 평균 볼륨(에너지) 계산
+                    let sum = 0;
+                    let weightedFreqSum = 0;
+                    for (let i = 0; i < bufferLength; i++) {
+                        sum += dataArray[i];
+                        weightedFreqSum += i * dataArray[i];
+                    }
+                    const avgVolume = sum / bufferLength;
+                    const centroid = sum > 0 ? weightedFreqSum / sum : 0;
+
+                    if (avgVolume > 2) { // 무음 제외 샘플링
+                        volumeSamples.push(avgVolume);
+                        pitchSamples.push(centroid);
+                    }
+
+                    // 혈압계처럼 숫자가 올라가는 시각 효과
+                    const simulatedSys = Math.min(180, Math.floor(80 + (progress * 0.8) + (avgVolume * 0.5)));
+                    const simulatedDia = Math.min(120, Math.floor(50 + (progress * 0.4) + (centroid * 0.3)));
+                    sysValue.textContent = String(simulatedSys).padStart(3, '0');
+                    diaValue.textContent = String(simulatedDia).padStart(2, '0');
+
+                    // 파형 그리기
+                    drawWaveform(dataArray, bufferLength);
+
+                    if (elapsed < duration) {
+                        animationId = requestAnimationFrame(updateAudioMetrics);
+                    } else {
+                        finishMeasurement(stream, volumeSamples, pitchSamples);
+                    }
+                }
+
+                updateAudioMetrics();
+
+            } catch (err) {
+                console.error("마이크 접근 오류:", err);
+                isMeasuring = false;
+                showMessage("마이크 권한이 필요합니다. 브라우저 설정에서 마이크를 허용해 주세요.", "error");
+            }
+        }
+
+        // 실시간 캔버스 파형 렌더링
+        function drawWaveform(dataArray, bufferLength) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            const barWidth = (canvas.width / bufferLength) * 2.5;
+            let x = 0;
+
+            for (let i = 0; i < bufferLength; i++) {
+                const barHeight = (dataArray[i] / 255) * canvas.height;
+                ctx.fillStyle = '#1e293b';
+                ctx.fillRect(x, canvas.height - barHeight, barWidth, barHeight);
+                x += barWidth + 1;
+            }
+        }
+
+        // 측정 종료 및 결과 산출
+        async function finishMeasurement(stream, volumeSamples, pitchSamples) {
+            isMeasuring = false;
+            cancelAnimationFrame(animationId);
+            
+            // 마이크 스트림 종료
+            stream.getTracks().forEach(track => track.stop());
+            if (audioContext) audioContext.close();
+
+            // UI 복원
+            pulseRing.classList.add('hidden');
+            btnLabel.textContent = '다시 측정';
+            progressContainer.classList.add('opacity-0');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-amber-500 animate-pulse inline-block"></span> 데이터 정밀 분석 중...`;
+
+            // 1. 기본 음향 물리량 기반 수치 계산
+            const avgVol = volumeSamples.length > 0 
+                ? volumeSamples.reduce((a, b) => a + b, 0) / volumeSamples.length 
+                : 15;
+            const avgPitch = pitchSamples.length > 0 
+                ? pitchSamples.reduce((a, b) => a + b, 0) / pitchSamples.length 
+                : 25;
+
+            // 음량과 톤의 변동성(표준편차) 계산 -> 감정 기복/설렘 지표
+            const volVariance = volumeSamples.length > 1
+                ? Math.sqrt(volumeSamples.map(x => Math.pow(x - avgVol, 2)).reduce((a, b) => a + b) / volumeSamples.length)
+                : 5;
+
+            // 혈압 수치 매핑 알고리즘
+            // SYS (활력지수): 90 ~ 165 (보통 115~125가 최적)
+            let sys = Math.round(92 + (avgVol * 1.1) + (avgPitch * 0.45));
+            sys = Math.max(88, Math.min(175, sys));
+
+            // DIA (안정지수): 60 ~ 105 (보통 75~85가 안정적)
+            let dia = Math.round(62 + (avgVol * 0.45) + (volVariance * 0.6));
+            dia = Math.max(55, Math.min(115, dia));
+
+            // PULSE (설렘/템포): 58 ~ 125
+            let pulse = Math.round(62 + (volVariance * 1.4) + (avgPitch * 0.35));
+            pulse = Math.max(55, Math.min(130, pulse));
+
+            // 2. Gemini API를 활용한 감성 코멘트 생성 (오디오 분석 포함)
+            mediaRecorder.onstop = async () => {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
+                await analyzeWithGemini(audioBlob, sys, dia, pulse, volumeSamples.length === 0);
+            };
+            if (mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+            }
+        }
+
+        // Blob을 Base64로 변환하는 헬퍼
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    const base64String = reader.result.split(',')[1];
+                    resolve(base64String);
+                };
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
+
+        // Gemini API 호출하여 목소리 톤과 말의 내용까지 반영한 진단 생성
+        async function analyzeWithGemini(audioBlob, fallbackSys, fallbackDia, fallbackPulse, isSilent) {
+            const apiKey = ""; // 런타임 환경 자동 주입
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-3-flash-preview:generateContent?key=${apiKey}`;
+
+            try {
+                const base64Audio = await blobToBase64(audioBlob);
+
+                const prompt = `
+당신은 사람의 목소리 톤, 억양, 말투, 감정 상태를 듣고 '혈압 수치'처럼 비유해 진단해주는 유쾌하고 따뜻한 '마음 혈압계' AI입니다.
+사용자의 음성을 듣고 다음 JSON 형식으로만 응답하세요.
+- sys (활력지수, 수축기 혈압 비유): 85~175 사이의 정수 (115~125가 가장 이상적인 활력, 낮으면 무기력/우울, 높으면 흥분/스트레스/텐션업)
+- dia (안정지수, 이완기 혈압 비유): 55~115 사이의 정수 (75~85가 가장 평온, 낮으면 기운 없음, 높으면 긴장/초조)
+- pulse (설렘/말하기 템포, 맥박 비유): 55~130 사이의 정수
+- statusLabel: 짧은 상태 배지 텍스트 (예: "정상 기분 (최적 상태)", "저기압 주의 (에너지 충전 필요)", "텐션 과열 (심호흡 필요)", "설렘 주의보 (기분 최고조)")
+- gaugePercent: 0~100 사이의 정수 (0: 매우 저기압, 40: 평온/정상, 70: 활기참, 95: 과열/긴장)
+- summary: 혈압을 읽어주듯 핵심 수치와 상태를 한 문장으로 요약 (예: "오늘 마음 혈압은 122에 81, 아주 이상적인 기분입니다!")
+- advice: 목소리에서 느껴지는 감정에 대한 따뜻하고 센스 있는 조언 2문장.
+참고 음향 측정치: SYS=${fallbackSys}, DIA=${fallbackDia}, PULSE=${fallbackPulse}, 무음여부=${isSilent}
+`;
+
+                const payload = {
+                    contents: [{
+                        role: "user",
+                        parts: [
+                            { text: prompt },
+                            {
+                                inlineData: {
+                                    mimeType: audioBlob.type || "audio/webm",
+                                    data: base64Audio
+                                }
+                            }
+                        ]
+                    }],
+                    generationConfig: {
+                        responseMimeType: "application/json",
+                        responseSchema: {
+                            type: "OBJECT",
+                            properties: {
+                                sys: { type: "INTEGER" },
+                                dia: { type: "INTEGER" },
+                                pulse: { type: "INTEGER" },
+                                statusLabel: { type: "STRING" },
+                                gaugePercent: { type: "INTEGER" },
+                                summary: { type: "STRING" },
+                                advice: { type: "STRING" }
+                            },
+                            required: ["sys", "dia", "pulse", "statusLabel", "gaugePercent", "summary", "advice"]
+                        }
+                    }
+                };
+
+                // 지수 백오프 재시도 적용
+                let responseData = null;
+                for (let attempt = 0; attempt < 3; attempt++) {
+                    const res = await fetch(apiUrl, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+                    if (res.ok) {
+                        responseData = await res.json();
+                        break;
+                    }
+                    await new Promise(r => setTimeout(r, Math.pow(2, attempt) * 1000));
+                }
+
+                if (responseData && responseData.candidates?.[0]?.content?.parts?.[0]?.text) {
+                    const result = JSON.parse(responseData.candidates[0].content.parts[0].text);
+                    displayResult(result);
+                    return;
+                }
+            } catch (error) {
+                // API 실패 시 로컬 음향 분석 결과로 자연스럽게 폴백
+            }
+
+            // 로컬 폴백 진단 생성
+            const fallbackResult = generateLocalDiagnosis(fallbackSys, fallbackDia, fallbackPulse, isSilent);
+            displayResult(fallbackResult);
+        }
+
+        // 로컬 음향 수치 기반 진단 생성기
+        function generateLocalDiagnosis(sys, dia, pulse, isSilent) {
+            if (isSilent) {
+                return {
+                    sys: 92,
+                    dia: 60,
+                    pulse: 58,
+                    statusLabel: "조용한 저기압 (측정 미약)",
+                    gaugePercent: 15,
+                    summary: "마음 혈압 92에 60, 목소리가 너무 작아 에너지가 부족해 보여요!",
+                    advice: "조금 더 크게 오늘 기분을 말씀해 주시겠어요? 기지개를 한 번 켜고 다시 측정해 보세요."
+                };
+            }
+            if (sys < 105) {
+                return {
+                    sys, dia, pulse,
+                    statusLabel: "마음 저기압 (휴식 필요)",
+                    gaugePercent: 20,
+                    summary: `마음 혈압 ${sys}에 ${dia}, 맥박 ${pulse}으로 다소 차분하고 가라앉은 상태입니다.`,
+                    advice: "목소리에서 약간의 피로감과 차분함이 느껴집니다. 따뜻한 차 한 잔과 함께 잠시 여유를 가져보세요."
+                };
+            } else if (sys <= 132 && dia <= 88) {
+                return {
+                    sys, dia, pulse,
+                    statusLabel: "정상 기분 (최적 밸런스)",
+                    gaugePercent: 45,
+                    summary: `마음 혈압 ${sys}에 ${dia}, 맥박 ${pulse}으로 아주 건강한 마음 상태입니다!`,
+                    advice: "목소리 톤이 안정적이고 긍정적인 에너지가 잘 잡혀 있습니다. 오늘 어떤 일이든 잘 해내실 수 있을 거예요."
+                };
+            } else if (sys <= 148) {
+                return {
+                    sys, dia, pulse,
+                    statusLabel: "활기찬 고기압 (텐션 상승)",
+                    gaugePercent: 72,
+                    summary: `마음 혈압 ${sys}에 ${dia}, 맥박 ${pulse}으로 에너지가 넘치는 상태입니다!`,
+                    advice: "목소리에 생기와 열정이 가득 담겨 있네요! 좋은 에너지를 주변 사람들과도 나누어 보세요."
+                };
+            } else {
+                return {
+                    sys, dia, pulse,
+                    statusLabel: "텐션 과열 주의 (심호흡 필요)",
+                    gaugePercent: 90,
+                    summary: `마음 혈압 ${sys}에 ${dia}, 맥박 ${pulse}으로 감정이 꽤 고조되어 있습니다.`,
+                    advice: "흥분했거나 긴장도가 조금 높아 보입니다. 천천히 깊게 숨을 들이마시고 내쉬며 마음을 가라앉혀 보세요."
+                };
+            }
+        }
+
+        // 화면에 최종 수치 및 진단 결과 렌더링
+        function displayResult(data) {
+            statusText.innerHTML = `<span class="w-2 h-2 rounded-full bg-emerald-600 inline-block"></span> 측정 완료 (COMPLETE)`;
+            instructionText.textContent = "다시 측정하려면 아래 버튼을 눌러주세요.";
+
+            // 숫자 카운트업 애니메이션
+            animateValue(sysValue, 0, data.sys, 700, 3);
+            animateValue(diaValue, 0, data.dia, 700, 2);
+            animateValue(pulseValue, 0, data.pulse, 700, 2);
+
+            // 게이지 인디케이터 이동
+            const clampedPercent = Math.max(5, Math.min(95, data.gaugePercent));
+            gaugeIndicator.style.left = `calc(${clampedPercent}% - 6px)`;
+            gaugeIndicator.classList.remove('opacity-0');
+
+            // 결과 카드 스타일링 및 내용 업데이트
+            moodBadge.textContent = data.statusLabel;
+            moodBadge.className = "px-3 py-1 rounded-full text-xs font-bold ";
+            if (data.gaugePercent < 30) {
+                moodBadge.classList.add("bg-blue-100", "text-blue-700");
+            } else if (data.gaugePercent < 60) {
+                moodBadge.classList.add("bg-emerald-100", "text-emerald-700");
+            } else if (data.gaugePercent < 80) {
+                moodBadge.classList.add("bg-amber-100", "text-amber-700");
+            } else {
+                moodBadge.classList.add("bg-rose-100", "text-rose-700");
+            }
+
+            moodSummary.textContent = data.summary;
+            moodAdvice.textContent = data.advice;
+            resultCard.classList.remove('hidden');
+
+            // 음성 안내 실행
+            lastSpokenText = `${data.summary} ${data.advice}`;
+            speakResult(lastSpokenText);
+
+            // 로컬 스토리지에 기록 저장
+            saveHistory(data);
+        }
+
+        // 숫자 부드럽게 올라가는 애니메이션
+        function animateValue(el, start, end, duration, padLen) {
+            let startTimestamp = null;
+            const step = (timestamp) => {
+                if (!startTimestamp) startTimestamp = timestamp;
+                const progress = Math.min((timestamp - startTimestamp) / duration, 1);
+                const current = Math.floor(progress * (end - start) + start);
+                el.textContent = String(current).padStart(padLen, '0');
+                if (progress < 1) {
+                    window.requestAnimationFrame(step);
+                }
+            };
+            window.requestAnimationFrame(step);
+        }
+
+        // 기록 저장 (localStorage)
+        function saveHistory(data) {
+            const history = JSON.parse(localStorage.getItem('moodBpHistory') || '[]');
+            const timeStr = new Date().toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' });
+            const dateStr = new Date().toLocaleDateString('ko-KR', { month: 'short', day: 'numeric' });
+            
+            history.unshift({
+                time: `${dateStr} ${timeStr}`,
+                sys: data.sys,
+                dia: data.dia,
+                pulse: data.pulse,
+                statusLabel: data.statusLabel,
+                summary: data.summary
+            });
+
+            localStorage.setItem('moodBpHistory', JSON.stringify(history.slice(0, 20)));
+        }
+
+        // 기록 목록 렌더링
+        function renderHistory() {
+            const history = JSON.parse(localStorage.getItem('moodBpHistory') || '[]');
+            if (history.length === 0) {
+                historyList.innerHTML = `
+                    <div class="text-center py-12 text-slate-400 text-sm">
+                        아직 측정된 마음 혈압 기록이 없습니다.
+                    </div>`;
+                return;
+            }
+
+            historyList.innerHTML = history.map(item => `
+                <div class="p-3.5 rounded-2xl bg-slate-50 border border-slate-200/80 flex items-center justify-between">
+                    <div>
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-[11px] font-semibold text-slate-400">${item.time}</span>
+                            <span class="text-[11px] font-bold text-rose-600 bg-rose-50 px-2 py-0.5 rounded-md">${item.statusLabel}</span>
+                        </div>
+                        <p class="text-xs text-slate-700 font-medium line-clamp-1">${item.summary}</p>
+                    </div>
+                    <div class="text-right pl-3 shrink-0">
+                        <div class="digital-font text-base font-extrabold text-slate-800">${item.sys}/${item.dia}</div>
+                        <div class="text-[10px] text-slate-500 font-bold">PULSE ${item.pulse}</div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // 모달 열기/닫기 이벤트
+        historyBtn.addEventListener('click', () => {
+            renderHistory();
+            historyModal.classList.remove('hidden');
+        });
+
+        closeHistoryBtn.addEventListener('click', () => {
+            historyModal.classList.add('hidden');
+        });
+
+        clearHistoryBtn.addEventListener('click', () => {
+            localStorage.removeItem('moodBpHistory');
+            renderHistory();
+        });
+    </script>
+</body>
+</html>
